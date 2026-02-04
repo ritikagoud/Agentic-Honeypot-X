@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from models import ChatRequest, ChatResponse, ErrorResponse
+from models import ChatRequest, ChatResponse, ErrorResponse, MessageObject
 from scam_detector import ScamDetector
 from agent_logic import AgentController
 from session_manager import SessionManager
@@ -230,8 +230,13 @@ async def chat_endpoint(
     try:
         logger.info(f"Processing chat request for session: {request.sessionId}")
         
+        # Handle missing or None values with defaults
+        conversation_history = request.conversationHistory or []
+        metadata = request.metadata
+        message_text = request.message
+        
         # Ethical compliance check
-        if not ethical_compliance.check_illegal_instruction(request.message.text):
+        if not ethical_compliance.check_illegal_instruction(message_text):
             logger.warning(f"Illegal instruction detected in session {request.sessionId}")
             raise HTTPException(
                 status_code=400,
@@ -242,27 +247,37 @@ async def chat_endpoint(
         try:
             session = session_manager.get_or_create_session(
                 request.sessionId,
-                request.metadata
+                metadata
             )
         except Exception as e:
             error_handler.handle_session_error(request.sessionId, 'session_creation', e)
             raise HTTPException(status_code=500, detail="Failed to manage session")
         
+        # Create MessageObject for the incoming message
+        import time as time_module
+        current_timestamp = int(time_module.time() * 1000)  # Current time in milliseconds
+        
+        message_obj = MessageObject(
+            sender="scammer",
+            text=message_text,
+            timestamp=current_timestamp
+        )
+        
         # Add new message to session
-        session_manager.add_message(request.sessionId, request.message)
+        session_manager.add_message(request.sessionId, message_obj)
         
         # Detect scam intent with fallback handling
         scam_result = None
         try:
             scam_result = await scam_detector.analyze_message(
-                request.message.text,
-                request.conversationHistory,
+                message_text,
+                conversation_history,
                 session.scam_confidence
             )
         except Exception as e:
             logger.warning(f"Scam detection failed for session {request.sessionId}: {e}")
             # Use fallback scam detection
-            scam_result = _fallback_scam_detection(request.message.text)
+            scam_result = _fallback_scam_detection(message_text)
         
         # Update session with scam detection results
         if scam_result:
@@ -280,18 +295,18 @@ async def chat_endpoint(
                 session_manager.activate_persona(request.sessionId)
                 
                 response_text = await agent_controller.generate_response(
-                    request.message.text,
-                    request.conversationHistory,
+                    message_text,
+                    conversation_history,
                     session.persona_state,
-                    request.metadata
+                    metadata
                 )
             elif session.persona_active:
                 # Continue agent conversation
                 response_text = await agent_controller.generate_response(
-                    request.message.text,
-                    request.conversationHistory,
+                    message_text,
+                    conversation_history,
                     session.persona_state,
-                    request.metadata
+                    metadata
                 )
             else:
                 # Neutral response for non-scam messages
@@ -310,19 +325,19 @@ async def chat_endpoint(
         
         # Extract intelligence with error handling
         try:
-            intelligence = intelligence_extractor.extract_from_message(request.message.text)
+            intelligence = intelligence_extractor.extract_from_message(message_text)
             if intelligence:
                 session_manager.add_intelligence(request.sessionId, intelligence)
                 logger.debug(f"Intelligence extracted for session {request.sessionId}")
         except Exception as e:
-            error_handler.handle_extraction_error(request.message.text, e)
+            error_handler.handle_extraction_error(message_text, e)
             # Continue processing even if extraction fails
         
         # Behavioral analysis with error handling
         try:
             behavioral_update = intelligence_extractor.analyze_behavior(
-                request.message.text,
-                request.conversationHistory
+                message_text,
+                conversation_history
             )
             if behavioral_update:
                 session_manager.update_behavioral_analysis(request.sessionId, behavioral_update)
@@ -333,11 +348,11 @@ async def chat_endpoint(
         
         # Add agent response to session
         if response_text:
-            agent_message = {
-                "sender": "user",
-                "text": response_text,
-                "timestamp": request.message.timestamp + 1000  # 1 second later
-            }
+            agent_message = MessageObject(
+                sender="user",
+                text=response_text,
+                timestamp=current_timestamp + 1000  # 1 second later
+            )
             session_manager.add_message(request.sessionId, agent_message)
         
         # Check for conversation completion and trigger reporting
