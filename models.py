@@ -26,8 +26,8 @@ class MetadataObject(BaseModel):
 class ChatRequest(BaseModel):
     """Main API request model."""
     sessionId: str = Field(..., description="Unique session identifier")
-    message: MessageObject = Field(..., description="Latest incoming message")
-    conversationHistory: List[MessageObject] = Field(default=[], description="Previous messages")
+    message: str = Field(..., description="Latest incoming message text")
+    conversationHistory: Optional[List[MessageObject]] = Field(default=[], description="Previous messages")
     metadata: Optional[MetadataObject] = Field(None, description="Conversation metadata")
 
 
