@@ -3,7 +3,7 @@ Pydantic models for the Agentic Honey-Pot system.
 Defines request/response schemas and data structures.
 """
 
-from pydantic import BaseModel, Field, validator, ConfigDict
+from pydantic import BaseModel, Field, validator
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 from enum import Enum
@@ -25,17 +25,19 @@ class MetadataObject(BaseModel):
 
 class ChatRequest(BaseModel):
     """Main API request model with GUVI tester compatibility."""
-    model_config = ConfigDict(populate_by_name=True)
-    
-    sessionId: str = Field(..., alias="session_id", description="Unique session identifier")
+    sessionId: str = Field(..., alias="sessionId", description="Unique session identifier")
     message: str = Field(..., description="Latest incoming message text")
-    conversationHistory: Optional[List[MessageObject]] = Field(default=[], description="Previous messages")
+    conversationHistory: Optional[List[MessageObject]] = Field(default=[], alias="conversationHistory", description="Previous messages")
     metadata: Optional[MetadataObject] = Field(None, description="Conversation metadata")
+    
+    class Config:
+        populate_by_name = True
+        validate_by_name = True
 
 
 class ChatResponse(BaseModel):
-    """Standard API response model - exactly status and reply only."""
-    status: str = Field(..., description="Response status")
+    """Standard API response model."""
+    status: str = Field(default="success", description="Response status")
     reply: str = Field(..., description="Agent response message")
 
 
