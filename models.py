@@ -18,14 +18,16 @@ class MessageObject(BaseModel):
 
 class MetadataObject(BaseModel):
     """Conversation metadata."""
-    channel: str = Field(..., description="Communication channel: SMS/WhatsApp/Email")
-    language: str = Field(..., description="Language used in conversation")
-    locale: str = Field(..., description="Country or region code")
+    channel: Optional[str] = Field(None, description="Communication channel: SMS/WhatsApp/Email")
+    language: Optional[str] = Field(None, description="Language used in conversation")
+    locale: Optional[str] = Field(None, description="Country or region code")
 
 
 class ChatRequest(BaseModel):
     """Main API request model."""
-    sessionId: str = Field(..., description="Unique session identifier")
+    model_config = {"populate_by_name": True}
+    
+    sessionId: str = Field(..., alias="session_id", description="Unique session identifier")
     message: str = Field(..., description="Latest incoming message text")
     conversationHistory: Optional[List[MessageObject]] = Field(default=[], description="Previous messages")
     metadata: Optional[MetadataObject] = Field(None, description="Conversation metadata")
