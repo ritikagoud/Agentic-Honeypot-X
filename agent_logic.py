@@ -38,12 +38,13 @@ class AgentController:
         if api_key:
             try:
                 genai.configure(api_key=api_key)
-                self.model = genai.GenerativeModel('gemini-1.5-flash')
+                self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
                 self.ai_available = True
                 logger.info("Gemini AI initialized for agent responses")
             except Exception as e:
                 logger.warning(f"Failed to initialize Gemini AI: {e}")
                 self.ai_available = False
+                self.model = None
         else:
             logger.warning("No Gemini API key provided - using template responses")
         
@@ -192,22 +193,26 @@ class AgentController:
             
             Mrs. Sharma:"""
             
-            response = self.model.generate_content(prompt)
-            
-            if response and response.text:
-                # Clean up the response
-                clean_response = response.text.strip()
+            try:
+                response = self.model.generate_content(prompt)
                 
-                # Remove any "Mrs. Sharma:" prefix if AI added it
-                if clean_response.startswith("Mrs. Sharma:"):
-                    clean_response = clean_response[12:].strip()
+                if response and response.text:
+                    # Clean up the response
+                    clean_response = response.text.strip()
+                    
+                    # Remove any "Mrs. Sharma:" prefix if AI added it
+                    if clean_response.startswith("Mrs. Sharma:"):
+                        clean_response = clean_response[12:].strip()
+                    
+                    # Ensure response isn't too long
+                    if len(clean_response) > 200:
+                        clean_response = clean_response[:200] + "..."
+                    
+                    return clean_response
+            except Exception as e:
+                logger.error(f"AI model generation error: {e}")
+                # Don't re-raise, let it fall through to return None
                 
-                # Ensure response isn't too long
-                if len(clean_response) > 200:
-                    clean_response = clean_response[:200] + "..."
-                
-                return clean_response
-            
         except Exception as e:
             logger.error(f"AI response generation error: {e}")
             raise
