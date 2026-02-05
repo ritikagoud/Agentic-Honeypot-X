@@ -7,6 +7,7 @@ import os
 import logging
 import time
 import traceback
+import asyncio
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -312,14 +313,22 @@ async def chat(
             logger.warning(f"Failed to create message object: {e}")
             # Continue processing even if message creation fails
         
-        # Detect scam intent with fallback handling
+        # Detect scam intent with fallback handling and TIMEOUT
         scam_result = None
         try:
-            scam_result = await scam_detector.analyze_message(
-                message_text,
-                conversation_history,
-                session.scam_confidence if session else 0.0
+            # STRICT 5-second timeout for scam detection
+            scam_result = await asyncio.wait_for(
+                scam_detector.analyze_message(
+                    message_text,
+                    conversation_history,
+                    session.scam_confidence if session else 0.0
+                ),
+                timeout=5.0
             )
+        except asyncio.TimeoutError:
+            logger.warning(f"Scam detection timeout for session {session_id}")
+            # Use immediate fallback
+            scam_result = _fallback_scam_detection(message_text)
         except Exception as e:
             logger.warning(f"Scam detection failed for session {session_id}: {e}")
             # Use fallback scam detection
@@ -332,7 +341,7 @@ async def chat(
         except Exception as e:
             logger.warning(f"Failed to update scam confidence: {e}")
         
-        # Generate response with comprehensive error handling
+        # Generate response with comprehensive error handling and STRICT TIMEOUT
         response_text = None
         try:
             if scam_result and scam_result.is_scam and session and not session.persona_active:
@@ -340,33 +349,44 @@ async def chat(
                 logger.info(f"Scam detected in session {session_id}, activating Mrs. Sharma persona")
                 session_manager.activate_persona(session_id)
                 
-                response_text = await agent_controller.generate_response(
-                    message_text,
-                    conversation_history,
-                    session.persona_state if session else None,
-                    metadata
-                )
+                # STRICT 10-second timeout for AI generation
+                try:
+                    response_text = await asyncio.wait_for(
+                        agent_controller.generate_response(
+                            message_text,
+                            conversation_history,
+                            session.persona_state if session else None,
+                            metadata
+                        ),
+                        timeout=10.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"AI generation timeout for session {session_id}")
+                    response_text = "Arrey beta, net thoda slow hai, kya kaha tumne?"
+                    
             elif session and session.persona_active:
-                # Continue agent conversation
-                response_text = await agent_controller.generate_response(
-                    message_text,
-                    conversation_history,
-                    session.persona_state,
-                    metadata
-                )
+                # Continue agent conversation with timeout
+                try:
+                    response_text = await asyncio.wait_for(
+                        agent_controller.generate_response(
+                            message_text,
+                            conversation_history,
+                            session.persona_state,
+                            metadata
+                        ),
+                        timeout=10.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"AI generation timeout for session {session_id}")
+                    response_text = "Arrey beta, net thoda slow hai, kya kaha tumne?"
             else:
                 # Neutral response for non-scam messages
                 response_text = "I'm not sure I understand. Could you please clarify what you need help with?"
         
         except Exception as e:
             logger.warning(f"Agent response generation failed for session {session_id}: {e}")
-            try:
-                response_text = error_handler.handle_gemini_failure('agent_response', e)
-            except:
-                response_text = None
-            
-            if not response_text:
-                response_text = "I'm having some technical difficulties. Could you please try again?"
+            # IMMEDIATE fallback for any error
+            response_text = "Arrey beta, net thoda slow hai, kya kaha tumne?"
         
         # Ethical compliance check for response
         try:
@@ -376,25 +396,42 @@ async def chat(
         except Exception as e:
             logger.warning(f"Response ethical validation failed: {e}")
         
-        # Extract intelligence with error handling
+        # Extract intelligence with error handling and TIMEOUT
         try:
-            intelligence = intelligence_extractor.extract_from_message(message_text)
+            # Quick intelligence extraction with timeout
+            intelligence_task = asyncio.create_task(
+                asyncio.to_thread(intelligence_extractor.extract_from_message, message_text)
+            )
+            intelligence = await asyncio.wait_for(intelligence_task, timeout=2.0)
+            
             if intelligence and session:
                 session_manager.add_intelligence(session_id, intelligence)
                 logger.debug(f"Intelligence extracted for session {session_id}")
+        except asyncio.TimeoutError:
+            logger.warning(f"Intelligence extraction timeout for session {session_id}")
+            # Continue without intelligence extraction
         except Exception as e:
             logger.warning(f"Intelligence extraction failed: {e}")
             # Continue processing even if extraction fails
         
-        # Behavioral analysis with error handling
+        # Behavioral analysis with error handling and TIMEOUT
         try:
-            behavioral_update = intelligence_extractor.analyze_behavior(
-                message_text,
-                conversation_history
+            # Quick behavioral analysis with timeout
+            behavioral_task = asyncio.create_task(
+                asyncio.to_thread(
+                    intelligence_extractor.analyze_behavior,
+                    message_text,
+                    conversation_history
+                )
             )
+            behavioral_update = await asyncio.wait_for(behavioral_task, timeout=2.0)
+            
             if behavioral_update and session:
                 session_manager.update_behavioral_analysis(session_id, behavioral_update)
                 logger.debug(f"Behavioral analysis updated for session {session_id}")
+        except asyncio.TimeoutError:
+            logger.warning(f"Behavioral analysis timeout for session {session_id}")
+            # Continue without behavioral analysis
         except Exception as e:
             logger.warning(f"Behavioral analysis failed for session {session_id}: {e}")
             # Continue processing even if behavioral analysis fails
