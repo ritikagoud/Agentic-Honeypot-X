@@ -232,8 +232,13 @@ async def chat_endpoint(
         
         # Handle missing or None values with defaults
         conversation_history = request.conversationHistory or []
-        metadata = request.metadata
+        metadata = request.metadata if request.metadata else None
         message_text = request.message
+        
+        # Ensure metadata is properly handled - create safe defaults if needed
+        safe_metadata = None
+        if metadata and (metadata.channel or metadata.language or metadata.locale):
+            safe_metadata = metadata
         
         # Ethical compliance check
         if not ethical_compliance.check_illegal_instruction(message_text):
@@ -247,7 +252,7 @@ async def chat_endpoint(
         try:
             session = session_manager.get_or_create_session(
                 request.sessionId,
-                metadata
+                safe_metadata
             )
         except Exception as e:
             error_handler.handle_session_error(request.sessionId, 'session_creation', e)
@@ -298,7 +303,7 @@ async def chat_endpoint(
                     message_text,
                     conversation_history,
                     session.persona_state,
-                    metadata
+                    safe_metadata
                 )
             elif session.persona_active:
                 # Continue agent conversation
@@ -306,7 +311,7 @@ async def chat_endpoint(
                     message_text,
                     conversation_history,
                     session.persona_state,
-                    metadata
+                    safe_metadata
                 )
             else:
                 # Neutral response for non-scam messages
@@ -373,7 +378,7 @@ async def chat_endpoint(
         
         return ChatResponse(
             status="success",
-            reply=response_text or "I'm here to help. What can I do for you?"
+            reply=str(response_text or "I'm here to help. What can I do for you?")
         )
         
     except HTTPException:
@@ -493,3 +498,4 @@ if __name__ == "__main__":
         log_level="info",
         access_log=True
     )
+
