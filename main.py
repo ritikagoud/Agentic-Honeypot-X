@@ -10,8 +10,10 @@ import traceback
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 from typing import Optional
+from pydantic import ValidationError
 
 from models import ChatRequest, ChatResponse, ErrorResponse, MessageObject
 from scam_detector import ScamDetector
@@ -115,6 +117,43 @@ app.add_middleware(
 )
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle Pydantic validation errors - return 200 with error message instead of 422."""
+    logger.warning(f"Validation error in {request.url.path}: {exc.errors()}")
+    
+    # Extract meaningful error message
+    error_details = []
+    for error in exc.errors():
+        field = " -> ".join(str(loc) for loc in error["loc"])
+        msg = error["msg"]
+        error_details.append(f"{field}: {msg}")
+    
+    error_message = "Invalid request format: " + "; ".join(error_details)
+    
+    return JSONResponse(
+        status_code=200,  # Return 200 instead of 422
+        content={
+            "status": "error",
+            "reply": error_message
+        }
+    )
+
+
+@app.exception_handler(ValidationError)
+async def pydantic_validation_exception_handler(request: Request, exc: ValidationError):
+    """Handle direct Pydantic validation errors."""
+    logger.warning(f"Pydantic validation error in {request.url.path}: {exc.errors()}")
+    
+    return JSONResponse(
+        status_code=200,  # Return 200 instead of 422
+        content={
+            "status": "error",
+            "reply": "Request validation failed - please check your request format"
+        }
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler - return 200 with error message instead of 500."""
@@ -203,7 +242,25 @@ async def chat(
         # Safely extract request data with defaults
         try:
             session_id = str(request.sessionId) if request.sessionId else "unknown_session"
-            message_text = str(request.message) if request.message else ""
+            
+            # Handle Union[str, MessageObject, Dict[str, Any]] message field
+            message_text = ""
+            if isinstance(request.message, str):
+                message_text = request.message
+            elif isinstance(request.message, dict):
+                # Extract text from dictionary (common formats)
+                message_text = (
+                    request.message.get("text") or 
+                    request.message.get("content") or 
+                    request.message.get("message") or
+                    str(request.message)
+                )
+            elif hasattr(request.message, 'text'):
+                # MessageObject
+                message_text = request.message.text or ""
+            else:
+                message_text = str(request.message)
+            
             conversation_history = request.conversationHistory or []
             metadata = request.metadata
         except Exception as e:
