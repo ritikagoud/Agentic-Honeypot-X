@@ -29,11 +29,11 @@ class MetadataObject(BaseModel):
 
 class ChatRequest(BaseModel):
     """Main API request model with bulletproof GUVI compatibility."""
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
     
     # Use aliases to accept both sessionId and session_id
     sessionId: str = Field(..., alias="sessionId", description="Unique session identifier")
-    message: str = Field(..., description="Latest incoming message text")
+    message: Union[str, MessageObject, Dict[str, Any], int, float] = Field(..., description="Message as string, object, dictionary, or number")
     conversationHistory: Optional[List[MessageObject]] = Field(
         default=[], 
         alias="conversationHistory", 
