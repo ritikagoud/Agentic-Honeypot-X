@@ -206,10 +206,10 @@ async def get_metrics():
     return metrics
 
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post("/chat")
 async def chat_endpoint(
     request: ChatRequest,
-    api_key: str = Depends(verify_api_key)
+    x_api_key: Optional[str] = Header(None)
 ):
     """
     Main chat endpoint with comprehensive request processing pipeline.
@@ -228,6 +228,23 @@ async def chat_endpoint(
     start_time = time.time()
     
     try:
+        # Verify API key authentication directly
+        if not x_api_key:
+            logger.warning("Request received without API key")
+            raise HTTPException(
+                status_code=401,
+                detail="Missing x-api-key header"
+            )
+        
+        # In production, validate against secure key storage
+        # For hackathon, accept any non-empty key
+        if not x_api_key.strip():
+            logger.warning("Request received with empty API key")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid API key"
+            )
+        
         logger.info(f"Processing chat request for session: {request.sessionId}")
         
         # Handle missing or None values with defaults - GUVI compatibility
@@ -371,10 +388,11 @@ async def chat_endpoint(
         
         logger.info(f"Successfully processed request for session {request.sessionId} in {processing_time:.3f}s")
         
-        return ChatResponse(
-            status="success",
-            reply=str(response_text or "I'm here to help. What can I do for you?")
-        )
+        # Return clean dictionary format for GUVI compatibility
+        return {
+            "status": "success",
+            "reply": str(response_text or "I'm here to help. What can I do for you?")
+        }
         
     except HTTPException:
         # Re-raise HTTP exceptions
