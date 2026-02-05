@@ -232,13 +232,19 @@ async def chat_endpoint(
         
         # Handle missing or None values with defaults
         conversation_history = request.conversationHistory or []
-        metadata = request.metadata if request.metadata else None
+        metadata = request.metadata
         message_text = request.message
         
         # Ensure metadata is properly handled - create safe defaults if needed
         safe_metadata = None
-        if metadata and (metadata.channel or metadata.language or metadata.locale):
-            safe_metadata = metadata
+        if metadata:
+            # Only use metadata if it has at least one non-None field
+            if hasattr(metadata, 'channel') and metadata.channel:
+                safe_metadata = metadata
+            elif hasattr(metadata, 'language') and metadata.language:
+                safe_metadata = metadata
+            elif hasattr(metadata, 'locale') and metadata.locale:
+                safe_metadata = metadata
         
         # Ethical compliance check
         if not ethical_compliance.check_illegal_instruction(message_text):
@@ -498,4 +504,3 @@ if __name__ == "__main__":
         log_level="info",
         access_log=True
     )
-
