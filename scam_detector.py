@@ -44,12 +44,13 @@ class ScamDetector:
         if api_key:
             try:
                 genai.configure(api_key=api_key)
-                self.model = genai.GenerativeModel('gemini-1.5-flash')
+                self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
                 self.ai_available = True
                 logger.info("Gemini AI initialized for scam detection")
             except Exception as e:
                 logger.warning(f"Failed to initialize Gemini AI: {e}")
                 self.ai_available = False
+                self.model = None
         else:
             logger.warning("No Gemini API key provided - using rule-based detection only")
         
@@ -159,11 +160,15 @@ class ScamDetector:
             - Police/arrest threat scams
             """
             
-            response = self.model.generate_content(prompt)
-            
-            if response and response.text:
-                return self._parse_ai_response(response.text)
-            
+            try:
+                response = self.model.generate_content(prompt)
+                
+                if response and response.text:
+                    return self._parse_ai_response(response.text)
+            except Exception as e:
+                logger.error(f"AI model generation error: {e}")
+                # Don't re-raise, let it fall through to return None
+                
         except Exception as e:
             logger.error(f"AI analysis error: {e}")
             raise
