@@ -1,48 +1,68 @@
 """
-Pydantic models for the Agentic Honey-Pot system.
-Defines request/response schemas and data structures.
+Bulletproof Pydantic V2 models for GUVI tester compatibility.
+All fields are optional with proper aliases and validation.
 """
 
-from pydantic import BaseModel, Field, validator
-from typing import List, Dict, Optional, Any
+from pydantic import BaseModel, Field, ConfigDict
+from typing import List, Dict, Optional, Any, Union
 from datetime import datetime
 from enum import Enum
 
 
 class MessageObject(BaseModel):
-    """Individual message in a conversation."""
-    sender: str = Field(..., description="Message sender: 'scammer' or 'user'")
-    text: str = Field(..., description="Message content")
-    timestamp: int = Field(..., description="Epoch time in milliseconds")
+    """Individual message in a conversation - all fields optional for flexibility."""
+    model_config = ConfigDict(populate_by_name=True)
+    
+    sender: Optional[str] = Field(None, description="Message sender: 'scammer' or 'user'")
+    text: Optional[str] = Field(None, description="Message content")
+    timestamp: Optional[int] = Field(None, description="Epoch time in milliseconds")
 
 
 class MetadataObject(BaseModel):
-    """Conversation metadata with all optional fields."""
+    """Conversation metadata - all fields optional with None defaults."""
+    model_config = ConfigDict(populate_by_name=True)
+    
     channel: Optional[str] = Field(None, description="Communication channel: SMS/WhatsApp/Email")
     language: Optional[str] = Field(None, description="Language used in conversation")
     locale: Optional[str] = Field(None, description="Country or region code")
 
 
 class ChatRequest(BaseModel):
-    """Main API request model with GUVI tester compatibility."""
+    """Main API request model with bulletproof GUVI compatibility."""
+    model_config = ConfigDict(populate_by_name=True)
+    
+    # Use aliases to accept both sessionId and session_id
     sessionId: str = Field(..., alias="sessionId", description="Unique session identifier")
     message: str = Field(..., description="Latest incoming message text")
-    conversationHistory: Optional[List[MessageObject]] = Field(default=[], alias="conversationHistory", description="Previous messages")
+    conversationHistory: Optional[List[MessageObject]] = Field(
+        default=[], 
+        alias="conversationHistory", 
+        description="Previous messages"
+    )
     metadata: Optional[MetadataObject] = Field(None, description="Conversation metadata")
-    
-    class Config:
-        populate_by_name = True
-        validate_by_name = True
 
 
 class ChatResponse(BaseModel):
     """Standard API response model."""
+    model_config = ConfigDict(populate_by_name=True)
+    
     status: str = Field(default="success", description="Response status")
     reply: str = Field(..., description="Agent response message")
 
 
+class ErrorResponse(BaseModel):
+    """Error response model."""
+    model_config = ConfigDict(populate_by_name=True)
+    
+    status: str = Field(default="error", description="Error status")
+    message: str = Field(..., description="Error description")
+    code: Optional[str] = Field(None, description="Error code")
+
+
 class IntelligenceData(BaseModel):
     """Extracted intelligence from conversations."""
+    model_config = ConfigDict(populate_by_name=True)
+    
     bank_accounts: List[str] = Field(default=[], description="Extracted bank account numbers")
     ifsc_codes: List[str] = Field(default=[], description="Extracted IFSC codes")
     upi_ids: List[str] = Field(default=[], description="Extracted UPI IDs")
@@ -54,6 +74,8 @@ class IntelligenceData(BaseModel):
 
 class BehavioralMetrics(BaseModel):
     """Scammer behavioral analysis metrics."""
+    model_config = ConfigDict(populate_by_name=True)
+    
     aggression_level: int = Field(default=1, ge=1, le=10, description="Aggression rating 1-10")
     sophistication_score: int = Field(default=1, ge=1, le=10, description="Sophistication rating 1-10")
     urgency_tactics: List[str] = Field(default=[], description="Urgency techniques used")
@@ -64,6 +86,8 @@ class BehavioralMetrics(BaseModel):
 
 class PersonaState(BaseModel):
     """Mrs. Sharma persona state tracking."""
+    model_config = ConfigDict(populate_by_name=True)
+    
     current_mood: str = Field(default="confused", description="Current emotional state")
     knowledge_level: str = Field(default="naive", description="Tech knowledge level")
     engagement_strategy: str = Field(default="information_gathering", description="Current strategy")
@@ -73,6 +97,8 @@ class PersonaState(BaseModel):
 
 class SessionData(BaseModel):
     """Complete session information."""
+    model_config = ConfigDict(populate_by_name=True)
+    
     session_id: str = Field(..., description="Unique session identifier")
     conversation_history: List[MessageObject] = Field(default=[], description="All messages")
     extracted_intelligence: IntelligenceData = Field(default_factory=IntelligenceData)
@@ -88,6 +114,8 @@ class SessionData(BaseModel):
 
 class ExtractedIntelligence(BaseModel):
     """Intelligence report format for callback service."""
+    model_config = ConfigDict(populate_by_name=True)
+    
     bankAccounts: List[str] = Field(default=[], description="Bank account numbers")
     upiIds: List[str] = Field(default=[], description="UPI IDs")
     phishingLinks: List[str] = Field(default=[], description="Malicious URLs")
@@ -97,18 +125,13 @@ class ExtractedIntelligence(BaseModel):
 
 class IntelligenceReport(BaseModel):
     """Final intelligence report for hackathon callback."""
+    model_config = ConfigDict(populate_by_name=True)
+    
     sessionId: str = Field(..., description="Session identifier")
     scamDetected: bool = Field(..., description="Whether scam was detected")
     totalMessagesExchanged: int = Field(..., description="Total message count")
     extractedIntelligence: ExtractedIntelligence = Field(..., description="All extracted data")
     agentNotes: str = Field(..., description="Behavioral analysis summary")
-
-
-class ErrorResponse(BaseModel):
-    """Error response model."""
-    status: str = Field(default="error", description="Error status")
-    message: str = Field(..., description="Error description")
-    code: Optional[str] = Field(None, description="Error code")
 
 
 class ConversationPhase(str, Enum):
