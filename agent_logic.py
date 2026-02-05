@@ -38,7 +38,7 @@ class AgentController:
         if api_key:
             try:
                 genai.configure(api_key=api_key)
-                self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
+                self.model = genai.GenerativeModel('gemini-1.5-flash')
                 self.ai_available = True
                 logger.info("Gemini AI initialized for agent responses")
             except Exception as e:
