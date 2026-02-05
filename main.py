@@ -230,21 +230,10 @@ async def chat_endpoint(
     try:
         logger.info(f"Processing chat request for session: {request.sessionId}")
         
-        # Handle missing or None values with defaults
+        # Handle missing or None values with defaults - GUVI compatibility
         conversation_history = request.conversationHistory or []
-        metadata = request.metadata
+        metadata = request.metadata  # Can be None, that's fine
         message_text = request.message
-        
-        # Ensure metadata is properly handled - create safe defaults if needed
-        safe_metadata = None
-        if metadata:
-            # Only use metadata if it has at least one non-None field
-            if hasattr(metadata, 'channel') and metadata.channel:
-                safe_metadata = metadata
-            elif hasattr(metadata, 'language') and metadata.language:
-                safe_metadata = metadata
-            elif hasattr(metadata, 'locale') and metadata.locale:
-                safe_metadata = metadata
         
         # Ethical compliance check
         if not ethical_compliance.check_illegal_instruction(message_text):
@@ -254,11 +243,11 @@ async def chat_endpoint(
                 detail="Request contains prohibited content"
             )
         
-        # Get or create session with error handling
+        # Get or create session with error handling - GUVI compatible
         try:
             session = session_manager.get_or_create_session(
                 request.sessionId,
-                safe_metadata
+                metadata  # Pass metadata directly, can be None
             )
         except Exception as e:
             error_handler.handle_session_error(request.sessionId, 'session_creation', e)
