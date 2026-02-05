@@ -29,13 +29,13 @@ class ChatRequest(BaseModel):
     
     sessionId: str = Field(..., alias="session_id", description="Unique session identifier")
     message: str = Field(..., description="Latest incoming message text")
-    conversationHistory: Optional[List[MessageObject]] = Field(default=[], description="Previous messages")
+    conversationHistory: Optional[List[MessageObject]] = Field(default=[], alias="conversation_history", description="Previous messages")
     metadata: Optional[MetadataObject] = Field(None, description="Conversation metadata")
 
 
 class ChatResponse(BaseModel):
     """Standard API response model."""
-    status: str = Field(default="success", description="Response status")
+    status: str = Field(..., description="Response status")
     reply: str = Field(..., description="Agent response message")
 
 
